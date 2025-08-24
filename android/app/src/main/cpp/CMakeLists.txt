@@ -14,7 +14,10 @@ set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(ENABLE_SSE4_1 OFF CACHE BOOL "" FORCE)
 set(ENABLE_AVX2 OFF CACHE BOOL "" FORCE)
-set(RNNOISE_SKIP_MODEL_DOWNLOAD ON CACHE BOOL "" FORCE)
+# Do not force RNNOISE_SKIP_MODEL_DOWNLOAD here.
+# Root CMake defaults to downloading the model when needed.
+# To skip download (when rnnoise_data.c is committed), pass:
+#   -DRNNOISE_SKIP_MODEL_DOWNLOAD=ON
 
 add_subdirectory(${RNNOISE_ROOT} ${CMAKE_BINARY_DIR}/rnnoise-build EXCLUDE_FROM_ALL)
 
