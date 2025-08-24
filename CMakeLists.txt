@@ -2,13 +2,17 @@ cmake_minimum_required(VERSION 3.15)
 project(rnnoise C)
 
 # --- Model Download, Checksum, and Extraction ---
-set(MODEL_VERSION_FILE "${CMAKE_SOURCE_DIR}/model_version")
+# Allow skipping network during cross builds (e.g., Android NDK) when sources already include rnnoise_data.c
+option(RNNOISE_SKIP_MODEL_DOWNLOAD "Skip model download and extraction (use existing rnnoise_data.c)" OFF)
+
+if(NOT RNNOISE_SKIP_MODEL_DOWNLOAD)
+set(MODEL_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/model_version")
 file(READ "${MODEL_VERSION_FILE}" MODEL_HASH)
 string(STRIP "${MODEL_HASH}" MODEL_HASH)
 set(MODEL_FILENAME "rnnoise_data-${MODEL_HASH}.tar.gz")
 set(MODEL_URL "https://media.xiph.org/rnnoise/models/${MODEL_FILENAME}")
 
-set(MODEL_PATH "${CMAKE_SOURCE_DIR}/${MODEL_FILENAME}")
+set(MODEL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${MODEL_FILENAME}")
 
 # Portable path: use CMake built-ins for download, checksum and extraction
 set(NEED_DOWNLOAD TRUE)
@@ -38,16 +42,19 @@ if(NEED_DOWNLOAD)
     message(STATUS "Model downloaded and checksum verified.")
 endif()
 
-# Extract model archive using CMake (portable across platforms)
-execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E tar xzf "${MODEL_PATH}"
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    RESULT_VARIABLE TAR_RESULT
-)
-if(NOT TAR_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to extract ${MODEL_FILENAME}. Please extract it manually.")
+    # Extract model archive using CMake (portable across platforms)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E tar xzf "${MODEL_PATH}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE TAR_RESULT
+    )
+    if(NOT TAR_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to extract ${MODEL_FILENAME}. Please extract it manually.")
+    else()
+        message(STATUS "Model archive extracted.")
+    endif()
 else()
-    message(STATUS "Model archive extracted.")
+    message(STATUS "RNNOISE_SKIP_MODEL_DOWNLOAD=ON: Skipping model download/extraction.")
 endif()
 
 # Options
@@ -60,7 +67,7 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Includes
-include_directories(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Define math constants and flags globally for MSVC builds so all targets (examples/tools) see them
 if(MSVC)
@@ -96,7 +103,7 @@ endif()
 
 add_library(rnnoise STATIC ${RNNOISE_SOURCES})
 
-target_include_directories(rnnoise PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(rnnoise PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_compile_definitions(rnnoise PRIVATE HAVE_CONFIG_H)
 
@@ -138,7 +145,7 @@ if(MSVC)
 
     # Silence MSVC truncation warnings (C4305) originating from the generated rnnoise_data.c
     # Apply the /wd4305 flag only to the huge generated source so other warnings stay visible.
-    set_source_files_properties(${CMAKE_SOURCE_DIR}/src/rnnoise_data.c PROPERTIES COMPILE_FLAGS "/wd4305")
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/rnnoise_data.c PROPERTIES COMPILE_FLAGS "/wd4305")
 
     # If SSE4.1-only code is selected, MSVC has no separate SSE4.1 switch; leave as-is. If you run into
     # missing intrinsics, we may need to add per-file compile options or edit source for MSVC intrinsics.
