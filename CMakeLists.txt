@@ -1,0 +1,136 @@
+cmake_minimum_required(VERSION 3.15)
+project(rnnoise C)
+
+# Options
+option(BUILD_EXAMPLES "Build examples (rnnoise_demo)" ON)
+option(BUILD_TOOLS "Build tools (dump_features, dump_weights_blob)" OFF)
+option(ENABLE_SSE4_1 "Enable SSE4.1 optimized sources" OFF)
+option(ENABLE_AVX2 "Enable AVX2 optimized sources" OFF)
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# Includes
+include_directories(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
+
+# Define math constants and flags globally for MSVC builds so all targets (examples/tools) see them
+if(MSVC)
+    add_compile_definitions(_USE_MATH_DEFINES=1 M_PI=3.14159265358979323846)
+endif()
+
+# Core sources (from the Makefile's RNNOISE_SOURCES)
+set(RNNOISE_SOURCES
+    src/denoise.c
+    src/rnn.c
+    src/pitch.c
+    src/kiss_fft.c
+    src/celt_lpc.c
+    src/nnet.c
+    src/nnet_default.c
+    src/parse_lpcnet_weights.c
+    src/rnnoise_data.c
+    src/rnnoise_tables.c
+)
+
+# Optional x86 optimized implementations
+if(ENABLE_SSE4_1)
+    list(APPEND RNNOISE_SOURCES src/x86/nnet_sse4_1.c)
+endif()
+if(ENABLE_AVX2)
+    list(APPEND RNNOISE_SOURCES src/x86/nnet_avx2.c)
+endif()
+
+# x86 runtime dispatch files (only add when any x86 optimization enabled)
+if(ENABLE_SSE4_1 OR ENABLE_AVX2)
+    list(APPEND RNNOISE_SOURCES src/x86/x86_dnn_map.c src/x86/x86cpu.c)
+endif()
+
+add_library(rnnoise STATIC ${RNNOISE_SOURCES})
+
+target_include_directories(rnnoise PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+
+target_compile_definitions(rnnoise PRIVATE HAVE_CONFIG_H)
+
+# Link math library on Unix-like toolchains
+if(NOT MSVC)
+    target_link_libraries(rnnoise PRIVATE m)
+endif()
+
+# Compiler flags for optimizations
+if(MSVC)
+    # Use /arch for Visual Studio when AVX2 is requested
+    if(ENABLE_AVX2)
+        # Enable AVX2 codegen
+        target_compile_options(rnnoise PRIVATE "/arch:AVX2")
+    endif()
+
+    # MSVC-specific optimizations and warnings
+    # Apply optimization flags per configuration so Debug is not optimized
+    target_compile_options(rnnoise PRIVATE
+        $<$<CONFIG:Debug>:/Od>
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:RelWithDebInfo>:/O2>
+        $<$<CONFIG:MinSizeRel>:/O1>
+        "/MP" "/W3")
+
+    # Silence deprecated CRT warnings from some older C code
+    target_compile_definitions(rnnoise PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+    # Ensure math constants like M_PI are available on MSVC
+    target_compile_definitions(rnnoise PRIVATE _USE_MATH_DEFINES=1 M_PI=3.14159265358979323846)
+
+    # Define architecture macros for source-level feature checks under MSVC
+    if(ENABLE_AVX2)
+        target_compile_definitions(rnnoise PRIVATE __AVX2__)
+    endif()
+    if(ENABLE_SSE4_1)
+        target_compile_definitions(rnnoise PRIVATE __SSE4_1__)
+    endif()
+
+    # Silence MSVC truncation warnings (C4305) originating from the generated rnnoise_data.c
+    # Apply the /wd4305 flag only to the huge generated source so other warnings stay visible.
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/src/rnnoise_data.c PROPERTIES COMPILE_FLAGS "/wd4305")
+
+    # If SSE4.1-only code is selected, MSVC has no separate SSE4.1 switch; leave as-is. If you run into
+    # missing intrinsics, we may need to add per-file compile options or edit source for MSVC intrinsics.
+else()
+    # GCC / Clang flags
+    if(ENABLE_AVX2)
+        target_compile_options(rnnoise PRIVATE -mavx -mfma -mavx2)
+    elseif(ENABLE_SSE4_1)
+        target_compile_options(rnnoise PRIVATE -msse4.1)
+    endif()
+    # General warnings similar to original Makefile
+    target_compile_options(rnnoise PRIVATE -Wall -Wextra -Wno-sign-compare -Wno-parentheses -Wno-long-long -fvisibility=hidden)
+endif()
+
+# Examples
+if(BUILD_EXAMPLES)
+    add_executable(rnnoise_demo examples/rnnoise_demo.c)
+    target_link_libraries(rnnoise_demo PRIVATE rnnoise)
+endif()
+
+# Tools
+if(BUILD_TOOLS)
+    add_executable(dump_features src/dump_features.c src/denoise.c src/pitch.c src/celt_lpc.c src/kiss_fft.c src/parse_lpcnet_weights.c src/rnnoise_tables.c)
+    target_compile_definitions(dump_features PRIVATE TRAINING)
+    target_link_libraries(dump_features PRIVATE ${CMAKE_DL_LIBS})
+
+    add_executable(dump_weights_blob src/write_weights.c)
+    target_compile_definitions(dump_weights_blob PRIVATE DUMP_BINARY_WEIGHTS)
+    target_link_libraries(dump_weights_blob PRIVATE ${CMAKE_DL_LIBS})
+
+    # Runtime smoke test: prints selected architecture
+    add_executable(rnnoise_smoke tools/rnnoise_smoke.c)
+    target_link_libraries(rnnoise_smoke PRIVATE rnnoise)
+endif()
+
+# Installation (optional)
+install(TARGETS rnnoise
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin)
+install(DIRECTORY include/ DESTINATION include)
+
+# Simple helper target to show configuration
+message(STATUS "rnnoise: BUILD_EXAMPLES=${BUILD_EXAMPLES} BUILD_TOOLS=${BUILD_TOOLS} ENABLE_SSE4_1=${ENABLE_SSE4_1} ENABLE_AVX2=${ENABLE_AVX2}")
