@@ -3,6 +3,8 @@ rnnoise — CMake instructions for Visual Studio 2022 and Windows
 This repo now includes a `CMakeLists.txt` to generate a Visual Studio 2022 solution or to build using Unix toolchains.
 
 Quick checklist
+- Get rnnoise from https://github.com/xiph/rnnoise
+- Copy the content in this repository to the root dir. of your copy of https://github.com/xiph/rnnoise
 - Generate VS2022 solution and build Release x64
 - Enable/disable x86-optimized sources (SSE4.1 / AVX2)
 - Troubleshoot common MSVC issues (intrinsics / inline asm / missing macros)
@@ -44,3 +46,6 @@ make -j$(nproc)
 Troubleshooting tips
 - Linker errors for math functions on MinGW: ensure libm is linked; CMake currently links `m` on non-MSVC toolchains.
 - CPU feature detection: `src/x86/x86cpu.c` performs runtime detection; building optimized sources is optional.
+
+
+*Made by CoPilot GPT-5*
