@@ -1,5 +1,7 @@
 rnnoise — CMake instructions for Visual Studio 2022 and Windows
 
+**Work in progress**
+
 This repo now includes a `CMakeLists.txt` to generate a Visual Studio 2022 solution or to build using Unix toolchains.
 
 Quick checklist
