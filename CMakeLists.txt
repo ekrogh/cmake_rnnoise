@@ -10,53 +10,44 @@ set(MODEL_URL "https://media.xiph.org/rnnoise/models/${MODEL_FILENAME}")
 
 set(MODEL_PATH "${CMAKE_SOURCE_DIR}/${MODEL_FILENAME}")
 
-if(NOT EXISTS "${MODEL_PATH}")
-    message(STATUS "Downloading latest model: ${MODEL_FILENAME}")
-    if(WIN32)
-        execute_process(COMMAND powershell -Command "Invoke-WebRequest -Uri ${MODEL_URL} -OutFile '${MODEL_PATH}'" RESULT_VARIABLE DL_RESULT)
-    else()
-        execute_process(COMMAND wget "${MODEL_URL}" RESULT_VARIABLE DL_RESULT)
-    endif()
-    if(NOT DL_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to download model file: ${MODEL_URL}")
-    endif()
-endif()
-
-# Checksum verification
-set(CHECKSUM_OK TRUE)
+# Portable path: use CMake built-ins for download, checksum and extraction
+set(NEED_DOWNLOAD TRUE)
 if(EXISTS "${MODEL_PATH}")
-    if(WIN32)
-        execute_process(COMMAND certutil -hashfile "${MODEL_PATH}" SHA256 OUTPUT_VARIABLE CHECKSUM_OUT)
-        string(REGEX REPLACE "[^A-Fa-f0-9]" "" CHECKSUM2 "${CHECKSUM_OUT}")
-        string(TOUPPER "${MODEL_HASH}" CHECKSUM_EXPECTED)
-        string(TOUPPER "${CHECKSUM2}" CHECKSUM2)
-        if(NOT CHECKSUM2 MATCHES "${CHECKSUM_EXPECTED}")
-            set(CHECKSUM_OK FALSE)
-        endif()
+    file(SHA256 "${MODEL_PATH}" MODEL_LOCAL_HASH)
+    if(MODEL_LOCAL_HASH STREQUAL "${MODEL_HASH}")
+        set(NEED_DOWNLOAD FALSE)
+        message(STATUS "Found cached model with valid checksum: ${MODEL_FILENAME}")
     else()
-        execute_process(COMMAND sha256sum "${MODEL_PATH}" OUTPUT_VARIABLE CHECKSUM_OUT)
-        string(REGEX MATCH "^[A-Fa-f0-9]+" CHECKSUM2 "${CHECKSUM_OUT}")
-        if(NOT "${MODEL_HASH}" STREQUAL "${CHECKSUM2}")
-            set(CHECKSUM_OK FALSE)
-        endif()
+        message(WARNING "Existing ${MODEL_FILENAME} has wrong checksum. Re-downloading.")
+        file(REMOVE "${MODEL_PATH}")
     endif()
 endif()
 
-if(NOT CHECKSUM_OK)
-    message(FATAL_ERROR "Checksum mismatch for ${MODEL_FILENAME}. Please delete the file and rerun CMake.")
+if(NEED_DOWNLOAD)
+    message(STATUS "Downloading model: ${MODEL_FILENAME}")
+    file(DOWNLOAD "${MODEL_URL}" "${MODEL_PATH}"
+         SHOW_PROGRESS TLS_VERIFY ON
+         EXPECTED_HASH "SHA256=${MODEL_HASH}"
+         STATUS DL_STATUS)
+    list(GET DL_STATUS 0 DL_CODE)
+    if(NOT DL_CODE EQUAL 0)
+        list(GET DL_STATUS 1 DL_MSG)
+        file(REMOVE "${MODEL_PATH}")
+        message(FATAL_ERROR "Failed to download model file: ${MODEL_URL}\n${DL_MSG}")
+    endif()
+    message(STATUS "Model downloaded and checksum verified.")
+endif()
+
+# Extract model archive using CMake (portable across platforms)
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E tar xzf "${MODEL_PATH}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE TAR_RESULT
+)
+if(NOT TAR_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to extract ${MODEL_FILENAME}. Please extract it manually.")
 else()
-    message(STATUS "Model checksum verified.")
-endif()
-
-# Extract model
-if(EXISTS "${MODEL_PATH}")
-    find_program(TAR_EXECUTABLE tar)
-    if(TAR_EXECUTABLE)
-        execute_process(COMMAND ${TAR_EXECUTABLE} -xvzf "${MODEL_PATH}" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-        message(STATUS "Model archive extracted.")
-    else()
-        message(WARNING "Could not find 'tar' executable. Please extract ${MODEL_FILENAME} manually.")
-    endif()
+    message(STATUS "Model archive extracted.")
 endif()
 
 # Options
