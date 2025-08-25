@@ -9,6 +9,8 @@ Quick checklist
 - Copy the content in this repository to the root dir. of your copy of https://github.com/xiph/rnnoise
 - Generate VS2022 solution and build Release x64
 - Enable/disable x86-optimized sources (SSE4.1 / AVX2)
+- Build in Android Studio
+- Build on WSL / Unix toolchains
 - Troubleshoot common MSVC issues (intrinsics / inline asm / missing macros)
 
 Generate a Visual Studio 2022 solution (recommended on Windows)
@@ -33,6 +35,10 @@ Notes for MSVC
 - If compilation fails in `src/x86/*` due to compiler-specific intrinsics or inline assembly, disable x86 optimization options and build the generic code path (set `-DENABLE_AVX2=OFF -DENABLE_SSE4_1=OFF`). I can help adapt the code for MSVC if you want.
 - The CMake file adds `_CRT_SECURE_NO_WARNINGS` to reduce CRT warnings.
 
+ Build in Android Studio
+ - Install NDK and CMake in Adnroid Studio (SDK Manager)
+ - Open the folder ...rnnoise\android in Android Studio
+ 
 Build on WSL / Unix toolchains
 - Install a C compiler and make (e.g., `sudo apt install build-essential cmake`), then from project root:
 
