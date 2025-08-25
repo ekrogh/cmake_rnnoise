@@ -21,3 +21,4 @@ copy /y .\src\rnnoise_data.c %1\
 copy /y .\src\rnnoise_data.h %1\
 copy /y .\src\rnnoise_tables.c %1\
 copy /y .\include\*.h %1\
+copy /y .\config.h %1\
