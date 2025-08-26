@@ -107,6 +107,18 @@ target_include_directories(rnnoise PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${
 
 target_compile_definitions(rnnoise PRIVATE HAVE_CONFIG_H)
 
+# Force rnnoise.lib output to a folder relative to the build directory
+# Resulting path: <build_folder>/../rnnoise/
+set(RNNOISE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/../rnnoise")
+file(MAKE_DIRECTORY "${RNNOISE_OUTPUT_DIR}")
+set_target_properties(rnnoise PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${RNNOISE_OUTPUT_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${RNNOISE_OUTPUT_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${RNNOISE_OUTPUT_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${RNNOISE_OUTPUT_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL "${RNNOISE_OUTPUT_DIR}"
+)
+
 # Link math library on Unix-like toolchains
 if(NOT MSVC)
     target_link_libraries(rnnoise PRIVATE m)
