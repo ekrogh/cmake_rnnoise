@@ -5,42 +5,80 @@ project(rnnoise C)
 # Allow skipping network during cross builds (e.g., Android NDK) when sources already include rnnoise_data.c
 option(RNNOISE_SKIP_MODEL_DOWNLOAD "Skip model download and extraction (use existing rnnoise_data.c)" OFF)
 
+# If the generated source already exists in the tree, skip download/extraction automatically
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/rnnoise_data.c" AND NOT RNNOISE_SKIP_MODEL_DOWNLOAD)
+    set(RNNOISE_SKIP_MODEL_DOWNLOAD ON)
+    message(STATUS "Found src/rnnoise_data.c; auto-skipping model download/extraction.")
+endif()
+
 if(NOT RNNOISE_SKIP_MODEL_DOWNLOAD)
-set(MODEL_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/model_version")
-file(READ "${MODEL_VERSION_FILE}" MODEL_HASH)
-string(STRIP "${MODEL_HASH}" MODEL_HASH)
-set(MODEL_FILENAME "rnnoise_data-${MODEL_HASH}.tar.gz")
-set(MODEL_URL "https://media.xiph.org/rnnoise/models/${MODEL_FILENAME}")
+    set(MODEL_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/model_version")
+    file(READ "${MODEL_VERSION_FILE}" MODEL_VER_RAW)
+    string(STRIP "${MODEL_VER_RAW}" MODEL_VER_RAW)
 
-set(MODEL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${MODEL_FILENAME}")
-
-# Portable path: use CMake built-ins for download, checksum and extraction
-set(NEED_DOWNLOAD TRUE)
-if(EXISTS "${MODEL_PATH}")
-    file(SHA256 "${MODEL_PATH}" MODEL_LOCAL_HASH)
-    if(MODEL_LOCAL_HASH STREQUAL "${MODEL_HASH}")
-        set(NEED_DOWNLOAD FALSE)
-        message(STATUS "Found cached model with valid checksum: ${MODEL_FILENAME}")
+    # Determine if model_version contains a full SHA256 or a short ID
+    set(MODEL_SHA256 "")
+    set(MODEL_ID "")
+    if(MODEL_VER_RAW MATCHES "^[0-9a-fA-F]{64}$")
+        # Full SHA256 provided; derive a short ID (first 7 chars) for the filename
+        set(MODEL_SHA256 "${MODEL_VER_RAW}")
+        string(SUBSTRING "${MODEL_VER_RAW}" 0 7 MODEL_ID)
+    elseif(MODEL_VER_RAW MATCHES "^[0-9a-fA-F]{7,16}$")
+        # Short ID provided (as used by upstream tarball names)
+        set(MODEL_ID "${MODEL_VER_RAW}")
     else()
-        message(WARNING "Existing ${MODEL_FILENAME} has wrong checksum. Re-downloading.")
-        file(REMOVE "${MODEL_PATH}")
+        message(WARNING "Unrecognized model_version content: '${MODEL_VER_RAW}'. Proceeding without checksum validation.")
+        set(MODEL_ID "${MODEL_VER_RAW}")
     endif()
-endif()
 
-if(NEED_DOWNLOAD)
-    message(STATUS "Downloading model: ${MODEL_FILENAME}")
-    file(DOWNLOAD "${MODEL_URL}" "${MODEL_PATH}"
-         SHOW_PROGRESS TLS_VERIFY ON
-         EXPECTED_HASH "SHA256=${MODEL_HASH}"
-         STATUS DL_STATUS)
-    list(GET DL_STATUS 0 DL_CODE)
-    if(NOT DL_CODE EQUAL 0)
-        list(GET DL_STATUS 1 DL_MSG)
-        file(REMOVE "${MODEL_PATH}")
-        message(FATAL_ERROR "Failed to download model file: ${MODEL_URL}\n${DL_MSG}")
+    set(MODEL_FILENAME "rnnoise_data-${MODEL_ID}.tar.gz")
+    set(MODEL_URL "https://media.xiph.org/rnnoise/models/${MODEL_FILENAME}")
+    set(MODEL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${MODEL_FILENAME}")
+
+    # Decide if we need to download
+    set(NEED_DOWNLOAD TRUE)
+    if(EXISTS "${MODEL_PATH}")
+        if(MODEL_SHA256)
+            file(SHA256 "${MODEL_PATH}" MODEL_LOCAL_HASH)
+            if(MODEL_LOCAL_HASH STREQUAL "${MODEL_SHA256}")
+                set(NEED_DOWNLOAD FALSE)
+                message(STATUS "Found cached model with valid checksum: ${MODEL_FILENAME}")
+            else()
+                message(WARNING "Existing ${MODEL_FILENAME} checksum mismatch. Re-downloading with verification.")
+                file(REMOVE "${MODEL_PATH}")
+            endif()
+        else()
+            # No known SHA256; trust cached file
+            set(NEED_DOWNLOAD FALSE)
+            message(STATUS "Found cached model (no checksum available to verify): ${MODEL_FILENAME}")
+        endif()
     endif()
-    message(STATUS "Model downloaded and checksum verified.")
-endif()
+
+    if(NEED_DOWNLOAD)
+        message(STATUS "Downloading model: ${MODEL_FILENAME}")
+        if(MODEL_SHA256)
+            file(DOWNLOAD "${MODEL_URL}" "${MODEL_PATH}"
+                 SHOW_PROGRESS TLS_VERIFY ON
+                 EXPECTED_HASH "SHA256=${MODEL_SHA256}"
+                 STATUS DL_STATUS)
+        else()
+            # Download without EXPECTED_HASH when only a short ID is known
+            file(DOWNLOAD "${MODEL_URL}" "${MODEL_PATH}"
+                 SHOW_PROGRESS TLS_VERIFY ON
+                 STATUS DL_STATUS)
+        endif()
+        list(GET DL_STATUS 0 DL_CODE)
+        if(NOT DL_CODE EQUAL 0)
+            list(GET DL_STATUS 1 DL_MSG)
+            file(REMOVE "${MODEL_PATH}")
+            message(FATAL_ERROR "Failed to download model file: ${MODEL_URL}\n${DL_MSG}")
+        endif()
+        if(MODEL_SHA256)
+            message(STATUS "Model downloaded and checksum verified.")
+        else()
+            message(STATUS "Model downloaded (no checksum provided by model_version; skipped verification).")
+        endif()
+    endif()
 
     # Extract model archive using CMake (portable across platforms)
     execute_process(
