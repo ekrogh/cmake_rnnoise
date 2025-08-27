@@ -240,3 +240,90 @@ install(DIRECTORY include/ DESTINATION include)
 
 # Simple helper target to show configuration
 message(STATUS "rnnoise: BUILD_EXAMPLES=${BUILD_EXAMPLES} BUILD_TOOLS=${BUILD_TOOLS} ENABLE_SSE4_1=${ENABLE_SSE4_1} ENABLE_AVX2=${ENABLE_AVX2}")
+
+# ----------------------------------------------------------------------------
+# Xcode helpers (macOS and iOS)
+# These targets generate standalone .xcodeproj projects in subfolders, so you
+# can open them directly in Xcode without reconfiguring your main build.
+# Usage:
+#   cmake --build . --target xcodeproj_macos
+#   cmake --build . --target xcodeproj_ios
+# The projects will appear in: <build>/xcode-macos and <build>/xcode-ios.
+# ----------------------------------------------------------------------------
+if(APPLE)
+    set(RNNOISE_XCODE_BASE_DIR "${CMAKE_BINARY_DIR}")
+    set(RNNOISE_XCODE_MACOS_DIR "${RNNOISE_XCODE_BASE_DIR}/xcode-macos")
+    set(RNNOISE_XCODE_IOS_DIR   "${RNNOISE_XCODE_BASE_DIR}/xcode-ios")
+
+    # Optionally generate the sub-projects at configure-time (useful for CMake GUI)
+    option(RNNOISE_GEN_XCODE_ON_CONFIGURE "Generate macOS/iOS Xcode subprojects during configure" ON)
+    if(RNNOISE_GEN_XCODE_ON_CONFIGURE)
+        # Avoid infinite recursion: turn off this option in the sub-configures
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_XCODE_MACOS_DIR}"
+        )
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_MACOS_DIR}" -G Xcode
+                    -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
+                    -DRNNOISE_GEN_XCODE_ON_CONFIGURE=OFF
+                    -DCMAKE_OSX_SYSROOT=macosx
+            RESULT_VARIABLE RNNOISE_XCODE_MAC_RES
+        )
+        if(NOT RNNOISE_XCODE_MAC_RES EQUAL 0)
+            message(WARNING "Failed to generate macOS Xcode project at configure-time. You can still run the xcodeproj_macos target later.")
+        endif()
+
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_XCODE_IOS_DIR}"
+        )
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_IOS_DIR}" -G Xcode
+                    -DCMAKE_SYSTEM_NAME=iOS
+                    -DCMAKE_OSX_SYSROOT=iphoneos
+                    -DCMAKE_OSX_ARCHITECTURES=arm64
+                    -DCMAKE_IOS_INSTALL_COMBINED=YES
+                    -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
+                    -DRNNOISE_GEN_XCODE_ON_CONFIGURE=OFF
+            RESULT_VARIABLE RNNOISE_XCODE_IOS_RES
+        )
+        if(NOT RNNOISE_XCODE_IOS_RES EQUAL 0)
+            message(WARNING "Failed to generate iOS Xcode project at configure-time. You can still run the xcodeproj_ios target later.")
+        endif()
+    endif()
+
+    add_custom_target(xcodeproj_macos
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_XCODE_MACOS_DIR}"
+        COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_MACOS_DIR}" -G Xcode
+                -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
+                -DCMAKE_OSX_SYSROOT=macosx
+        COMMENT "Generating Xcode project for macOS in ${RNNOISE_XCODE_MACOS_DIR}"
+        VERBATIM)
+
+    add_custom_target(xcodeproj_ios
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_XCODE_IOS_DIR}"
+        COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_IOS_DIR}" -G Xcode
+                -DCMAKE_SYSTEM_NAME=iOS
+                -DCMAKE_OSX_SYSROOT=iphoneos
+                -DCMAKE_OSX_ARCHITECTURES=arm64
+                -DCMAKE_IOS_INSTALL_COMBINED=YES
+                -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
+        COMMENT "Generating Xcode project for iOS (device, arm64) in ${RNNOISE_XCODE_IOS_DIR}"
+        VERBATIM)
+
+    message(STATUS "Custom targets added: xcodeproj_macos, xcodeproj_ios (use: cmake --build . --target <name>)")
+
+    # Convenience: open the generated projects in Xcode
+    add_custom_target(open_xcode_macos
+        DEPENDS xcodeproj_macos
+        COMMAND "${CMAKE_COMMAND}" -E echo "Opening: ${RNNOISE_XCODE_MACOS_DIR}/rnnoise.xcodeproj"
+        COMMAND open "${RNNOISE_XCODE_MACOS_DIR}/rnnoise.xcodeproj"
+        COMMENT "Opening macOS Xcode project"
+        VERBATIM)
+
+    add_custom_target(open_xcode_ios
+        DEPENDS xcodeproj_ios
+        COMMAND "${CMAKE_COMMAND}" -E echo "Opening: ${RNNOISE_XCODE_IOS_DIR}/rnnoise.xcodeproj"
+        COMMAND open "${RNNOISE_XCODE_IOS_DIR}/rnnoise.xcodeproj"
+        COMMENT "Opening iOS Xcode project"
+        VERBATIM)
+endif()
