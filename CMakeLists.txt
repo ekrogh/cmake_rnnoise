@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(rnnoise C)
 
+# If using Xcode, avoid generating the ZERO_CHECK target (less clutter)
+if(CMAKE_GENERATOR STREQUAL "Xcode")
+    set(CMAKE_SUPPRESS_REGENERATION ON)
+endif()
+
 # --- Model Download, Checksum, and Extraction ---
 # Allow skipping network during cross builds (e.g., Android NDK) when sources already include rnnoise_data.c
 option(RNNOISE_SKIP_MODEL_DOWNLOAD "Skip model download and extraction (use existing rnnoise_data.c)" OFF)
@@ -145,6 +150,18 @@ target_include_directories(rnnoise PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${
 
 target_compile_definitions(rnnoise PRIVATE HAVE_CONFIG_H)
 
+# Xcode: generate only the rnnoise scheme and hide CMake helper schemes
+if(CMAKE_GENERATOR STREQUAL "Xcode")
+    # Ensure schemes are generated but restrict to rnnoise
+    set(CMAKE_XCODE_GENERATE_SCHEME ON)
+    set_property(TARGET rnnoise PROPERTY XCODE_GENERATE_SCHEME TRUE)
+    foreach(_cmake_tgt ALL_BUILD ZERO_CHECK install package RUN_TESTS test Experimental ExperimentalMemCheck ExperimentalBuild)
+        if(TARGET ${_cmake_tgt})
+            set_property(TARGET ${_cmake_tgt} PROPERTY XCODE_GENERATE_SCHEME FALSE)
+        endif()
+    endforeach()
+endif()
+
 # Force rnnoise.lib output to a folder relative to a chosen base build directory
 # Default base is the current CMake binary dir; Xcode subprojects will forward
 # the root build dir so all variants drop into the same ../rnnoise.
@@ -255,11 +272,14 @@ if(BUILD_TOOLS)
 endif()
 
 # Installation (optional)
-install(TARGETS rnnoise
-        ARCHIVE DESTINATION lib
-        LIBRARY DESTINATION lib
-        RUNTIME DESTINATION bin)
-install(DIRECTORY include/ DESTINATION include)
+# Respect CMAKE_SKIP_INSTALL_RULES to omit install targets in subprojects
+if(NOT CMAKE_SKIP_INSTALL_RULES)
+    install(TARGETS rnnoise
+            ARCHIVE DESTINATION lib
+            LIBRARY DESTINATION lib
+            RUNTIME DESTINATION bin)
+    install(DIRECTORY include/ DESTINATION include)
+endif()
 
 # Simple helper target to show configuration
 message(STATUS "rnnoise: BUILD_EXAMPLES=${BUILD_EXAMPLES} BUILD_TOOLS=${BUILD_TOOLS} ENABLE_SSE4_1=${ENABLE_SSE4_1} ENABLE_AVX2=${ENABLE_AVX2}")
@@ -289,6 +309,10 @@ if(APPLE)
         COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_MACOS_DIR}" -G Xcode
             -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
             -DRNNOISE_OUTPUT_BASE_DIR:PATH=${CMAKE_BINARY_DIR}
+            -DBUILD_EXAMPLES=OFF -DBUILD_TOOLS=OFF
+            -DCMAKE_SKIP_INSTALL_RULES=ON
+            -DCMAKE_SUPPRESS_REGENERATION=ON
+            -DCMAKE_XCODE_GENERATE_SCHEME=ON
             -DRNNOISE_GEN_XCODE_ON_CONFIGURE=OFF
             -DCMAKE_OSX_SYSROOT=macosx
         RESULT_VARIABLE RNNOISE_XCODE_MAC_RES
@@ -308,6 +332,10 @@ if(APPLE)
             -DCMAKE_IOS_INSTALL_COMBINED=YES
             -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
             -DRNNOISE_OUTPUT_BASE_DIR:PATH=${CMAKE_BINARY_DIR}
+            -DBUILD_EXAMPLES=OFF -DBUILD_TOOLS=OFF
+            -DCMAKE_SKIP_INSTALL_RULES=ON
+            -DCMAKE_SUPPRESS_REGENERATION=ON
+            -DCMAKE_XCODE_GENERATE_SCHEME=ON
             -DRNNOISE_GEN_XCODE_ON_CONFIGURE=OFF
         RESULT_VARIABLE RNNOISE_XCODE_IOS_RES
     )
