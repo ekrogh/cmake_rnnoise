@@ -96,7 +96,7 @@ else()
 endif()
 
 # Options
-option(BUILD_EXAMPLES "Build examples (rnnoise_demo)" ON)
+option(BUILD_EXAMPLES "Build examples (rnnoise_demo)" OFF)
 option(BUILD_TOOLS "Build tools (dump_features, dump_weights_blob)" OFF)
 option(ENABLE_SSE4_1 "Enable SSE4.1 optimized sources" OFF)
 option(ENABLE_AVX2 "Enable AVX2 optimized sources" OFF)
@@ -290,40 +290,4 @@ if(APPLE)
             message(WARNING "Failed to generate iOS Xcode project at configure-time. You can still run the xcodeproj_ios target later.")
         endif()
     endif()
-
-    add_custom_target(xcodeproj_macos
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_XCODE_MACOS_DIR}"
-        COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_MACOS_DIR}" -G Xcode
-                -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
-                -DCMAKE_OSX_SYSROOT=macosx
-        COMMENT "Generating Xcode project for macOS in ${RNNOISE_XCODE_MACOS_DIR}"
-        VERBATIM)
-
-    add_custom_target(xcodeproj_ios
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_XCODE_IOS_DIR}"
-        COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_SOURCE_DIR}" -B "${RNNOISE_XCODE_IOS_DIR}" -G Xcode
-                -DCMAKE_SYSTEM_NAME=iOS
-                -DCMAKE_OSX_SYSROOT=iphoneos
-                -DCMAKE_OSX_ARCHITECTURES=arm64
-                -DCMAKE_IOS_INSTALL_COMBINED=YES
-                -DRNNOISE_SKIP_MODEL_DOWNLOAD=${RNNOISE_SKIP_MODEL_DOWNLOAD}
-        COMMENT "Generating Xcode project for iOS (device, arm64) in ${RNNOISE_XCODE_IOS_DIR}"
-        VERBATIM)
-
-    message(STATUS "Custom targets added: xcodeproj_macos, xcodeproj_ios (use: cmake --build . --target <name>)")
-
-    # Convenience: open the generated projects in Xcode
-    add_custom_target(open_xcode_macos
-        DEPENDS xcodeproj_macos
-        COMMAND "${CMAKE_COMMAND}" -E echo "Opening: ${RNNOISE_XCODE_MACOS_DIR}/rnnoise.xcodeproj"
-        COMMAND open "${RNNOISE_XCODE_MACOS_DIR}/rnnoise.xcodeproj"
-        COMMENT "Opening macOS Xcode project"
-        VERBATIM)
-
-    add_custom_target(open_xcode_ios
-        DEPENDS xcodeproj_ios
-        COMMAND "${CMAKE_COMMAND}" -E echo "Opening: ${RNNOISE_XCODE_IOS_DIR}/rnnoise.xcodeproj"
-        COMMAND open "${RNNOISE_XCODE_IOS_DIR}/rnnoise.xcodeproj"
-        COMMENT "Opening iOS Xcode project"
-        VERBATIM)
 endif()
