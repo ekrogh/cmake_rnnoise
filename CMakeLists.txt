@@ -162,40 +162,11 @@ if(CMAKE_GENERATOR STREQUAL "Xcode")
     endforeach()
 endif()
 
-# Force rnnoise.lib output to a folder relative to a chosen base build directory
-# Default base is the current CMake binary dir; Xcode subprojects will forward
-# the root build dir so all variants drop into the same ../rnnoise.
-set(RNNOISE_OUTPUT_BASE_DIR "${CMAKE_BINARY_DIR}" CACHE PATH "Base build dir used to compute rnnoise output path")
-# Sanitize in case the cache or command line injected surrounding quotes
-string(REGEX REPLACE "^\"|\"$" "" RNNOISE_OUTPUT_BASE_DIR "${RNNOISE_OUTPUT_BASE_DIR}")
-set(RNNOISE_OUTPUT_DIR "${RNNOISE_OUTPUT_BASE_DIR}/../rnnoise")
-file(MAKE_DIRECTORY "${RNNOISE_OUTPUT_DIR}")
-if(CMAKE_GENERATOR STREQUAL "Xcode")
-    # With Xcode, let CMake/Xcode decide the build artifact location; our POST_BUILD step handles copying.
-else()
-    set_target_properties(rnnoise PROPERTIES
-        ARCHIVE_OUTPUT_DIRECTORY "${RNNOISE_OUTPUT_DIR}"
-        ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${RNNOISE_OUTPUT_DIR}"
-        ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${RNNOISE_OUTPUT_DIR}"
-        ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${RNNOISE_OUTPUT_DIR}"
-        ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL "${RNNOISE_OUTPUT_DIR}"
-    )
-endif()
-
-# Generator-agnostic fallback to guarantee the artifact lands in RNNOISE_OUTPUT_DIR
-# Skip for Xcode; Xcode is already configured to write directly to RNNOISE_OUTPUT_DIR.
-if(NOT CMAKE_GENERATOR STREQUAL "Xcode")
-    add_custom_command(TARGET rnnoise POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_OUTPUT_DIR}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:rnnoise>" "${RNNOISE_OUTPUT_DIR}"
-        COMMENT "Copying librnnoise to ${RNNOISE_OUTPUT_DIR}")
-else()
-    # For Xcode, rely on a precise copy step to the parent build's ../rnnoise
-    add_custom_command(TARGET rnnoise POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${RNNOISE_OUTPUT_DIR}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:rnnoise>" "${RNNOISE_OUTPUT_DIR}"
-        COMMENT "Copying librnnoise to ${RNNOISE_OUTPUT_DIR} (Xcode)")
-endif()
+## Use default CMake output locations
+## The previous configuration forced outputs to <build>/../rnnoise via
+## ARCHIVE_OUTPUT_DIRECTORY and a POST_BUILD copy step. Those overrides have
+## been removed so artifacts are placed by the generator in standard build
+## directories (e.g., <build>/, per-config subfolders where applicable).
 
 # Link math library on Unix-like toolchains
 if(NOT MSVC)
